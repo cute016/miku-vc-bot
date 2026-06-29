@@ -42,10 +42,11 @@ class VoiceController:
             return await self._invoke(("play",), chat_id, stream)
         if replace:
             return await self._invoke(("change_stream",), chat_id, stream)
+        stream_type = getattr(StreamType(), "local_stream", None)
         result = self.calls.join_group_call(
             chat_id,
             stream,
-            stream_type=StreamType().pulse_stream,
+            **({"stream_type": stream_type} if stream_type is not None else {}),
         )
         return await result if hasattr(result, "__await__") else result
 
