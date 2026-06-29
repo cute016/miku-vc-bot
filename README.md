@@ -92,7 +92,7 @@ Inside Debian:
 
 ```bash
 apt update
-apt install python3 python3-venv python3-pip python3-pil python3-aiohttp git ffmpeg nano tmux -y
+apt install python3 python3-venv python3-pip python3-pil python3-aiohttp git ffmpeg nano tmux nodejs npm -y
 git clone https://github.com/cute016/miku-vc-bot.git
 cd miku-vc-bot
 python3 -m venv --system-site-packages venv-armv7
@@ -105,6 +105,23 @@ bash run.sh
 ```
 
 Always activate `source venv-armv7/bin/activate` before starting the bot on this route.
+
+If you ever see a `wrtc` / `ERR_DLOPEN_FAILED` error mentioning `/data/data/com.termux/files/usr/bin/node`, the Debian shell is accidentally using Termux's host `node`. Fix it inside Debian with:
+
+```bash
+apt update
+apt install -y nodejs npm
+which node
+```
+
+`which node` should show `/usr/bin/node`, not a `/data/data/com.termux/...` path. After that, reactivate the venv and reinstall PyTgCalls cleanly:
+
+```bash
+source venv-armv7/bin/activate
+pip uninstall -y py-tgcalls
+pip install --no-cache-dir py-tgcalls==0.9.7
+bash run.sh
+```
 
 ## Configuration
 

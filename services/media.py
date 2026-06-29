@@ -111,7 +111,7 @@ class MediaResolver:
         if is_video:
             return str(source)
         loop = asyncio.get_running_loop()
-        target = source.with_suffix(".mp3")
+        target = source.with_suffix(".wav")
 
         def convert():
             command = [
@@ -120,12 +120,14 @@ class MediaResolver:
                 "-i",
                 str(source),
                 "-vn",
+                "-f",
+                "wav",
+                "-acodec",
+                "pcm_s16le",
                 "-ac",
                 "2",
                 "-ar",
                 "48000",
-                "-b:a",
-                "192k",
                 str(target),
             ]
             completed = subprocess.run(command, capture_output=True, text=True)
