@@ -9,6 +9,7 @@ Every generated banner and now-playing card is branded with `@mikuvcrobot`. Tele
 - Audio and video VC playback, force play, pause, resume, skip, stop, loop, shuffle, volume, player and queue panels
 - YouTube search/links through `yt-dlp`, direct HTTP(S) streams, and replied Telegram audio/video files
 - Automatic assistant join through PyTgCalls, automatic queue advance, auto-leave, temporary-file cleanup, and fresh YouTube stream URL resolution
+- If the assistant is not yet a member, Miku creates a one-use invite and joins it automatically; the bot needs the Telegram admin permission to invite users
 - Per-group admin/auth permissions and English, Tamil, Hindi, and Tanglish preferences
 - Owner panel, editable captions/links/watermark/emoji values, live UI previews, maintenance and logging switches
 - Broadcast flags, logs, stats, update, restart, database backup/restore, blacklist, and emoji games

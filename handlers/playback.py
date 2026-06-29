@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from html import escape
 
 from pyrogram import filters
@@ -31,6 +32,42 @@ async def playback_chat_id(m) -> int:
     except Exception: return m.chat.id
 
 
+async def ensure_assistant(chat_id: int):
+    """Join the assistant to a chat automatically before VC playback."""
+    helper = await runtime.assistant.get_me()
+    try:
+        await runtime.assistant.get_chat_member(chat_id, helper.id)
+        return helper
+    except Exception:
+        pass
+
+    invite = None
+    try:
+        chat = await runtime.bot.get_chat(chat_id)
+        if getattr(chat, "username", None):
+            await runtime.assistant.join_chat(chat.username)
+        else:
+            invite = await runtime.bot.create_chat_invite_link(
+                chat_id,
+                name="Miku assistant auto-join",
+                member_limit=1,
+            )
+            await runtime.assistant.join_chat(invite.invite_link)
+        await asyncio.sleep(1)
+        await runtime.assistant.get_chat_member(chat_id, helper.id)
+        return helper
+    except Exception as exc:
+        raise PlayerError(
+            "I couldn't add the assistant automatically. Make the bot an admin "
+            "with Invite Users permission, then try /play again. "
+            f"Telegram said: {str(exc)[:120]}"
+        ) from exc
+    finally:
+        if invite:
+            try: await runtime.bot.revoke_chat_invite_link(chat_id, invite.invite_link)
+            except Exception: pass
+
+
 def register(app):
     @app.on_message(filters.command(PLAY_COMMANDS))
     async def play(_,m):
@@ -40,10 +77,14 @@ def register(app):
         cmd=m.command[0].lower(); video="vplay" in cmd; force="force" in cmd
         chat_id=await playback_chat_id(m)
         try:
-            helper=await runtime.assistant.get_me(); await runtime.assistant.get_chat_member(chat_id,helper.id)
-        except Exception:
+            helper=await ensure_assistant(chat_id)
+        except PlayerError as exc:
             helper=await runtime.assistant.get_me()
-            await m.reply_text("🤖 <b>Add me baby</b>\nThe assistant account must be in this chat before I can join its voice chat.",reply_markup=M([[B("➕ Add Assistant",url=f"tg://user?id={helper.id}")]])); return
+            await m.reply_text(
+                f"🤖 <b>Assistant auto-join failed</b>\n{escape(str(exc))}",
+                reply_markup=M([[B("➕ Add Assistant",url=f"tg://user?id={helper.id}")]]),
+            )
+            return
         query=" ".join(m.command[1:]); status=await m.reply_text("⏳ <b>Searching the neon soundscape...</b>")
         try:
             track=await runtime.media.resolve(query,m.from_user.id,m.from_user.first_name,video,m.reply_to_message)

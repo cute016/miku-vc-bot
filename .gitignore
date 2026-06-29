@@ -1,5 +1,7 @@
 .env
 venv/
+venv-armv7/
+session-venv/
 __pycache__/
 *.py[cod]
 *.session*
@@ -10,4 +12,3 @@ downloads/*
 thumbnails/*
 !thumbnails/.gitkeep
 database/*.tmp
-
