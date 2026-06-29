@@ -29,8 +29,23 @@ class MediaResolver:
             "quiet": True, "no_warnings": True, "noplaylist": True,
             "format": "best[height<=720]/best" if stream else "bestaudio[ext=m4a]/bestaudio[acodec!=none]/bestaudio/best",
             "socket_timeout": 20, "retries": 2,
-            "extract_flat": False, "skip_download": True,
+            "extract_flat": False, "skip_download": True, "default_search": "ytsearch",
         }
+
+    @staticmethod
+    def _pick_info(info):
+        if info and info.get("entries"):
+            return next((item for item in info["entries"] if item), None)
+        return info
+
+    async def _extract_info(self, target: str, is_video: bool):
+        loop = asyncio.get_running_loop()
+
+        def extract():
+            with yt_dlp.YoutubeDL(self._ydl(is_video)) as ydl:
+                return ydl.extract_info(target, download=False)
+
+        return await loop.run_in_executor(None, extract)
 
     async def resolve(self, query: str, requester_id: int, requester_name: str, is_video: bool, reply=None) -> Track:
         if reply and (reply.audio or reply.video or reply.document or reply.voice):
@@ -42,14 +57,18 @@ class MediaResolver:
         query = query.strip()
         if not query: raise MediaError("Reply to an audio/video file or give me a song name or URL.")
         if URL_RE.match(query) and urlparse(query).scheme not in {"http", "https"}: raise MediaError("Only HTTP(S) media links are supported.")
-        target = query if URL_RE.match(query) else f"ytsearch1:{query}"
-        loop = asyncio.get_running_loop()
-
-        def extract():
-            with yt_dlp.YoutubeDL(self._ydl(is_video)) as ydl: return ydl.extract_info(target, download=False)
-        try: info = await loop.run_in_executor(None, extract)
-        except Exception as exc: raise MediaError(f"Media lookup failed: {str(exc)[:160]}") from exc
-        if info.get("entries"): info = next((x for x in info["entries"] if x), None)
+        targets = [query] if URL_RE.match(query) else [f"ytsearch1:{query}", f"ytsearch3:{query} official audio", query]
+        info = None
+        last_error = None
+        for target in targets:
+            try:
+                info = self._pick_info(await self._extract_info(target, is_video))
+                if info:
+                    break
+            except Exception as exc:
+                last_error = exc
+        if not info and last_error:
+            raise MediaError(f"Media lookup failed: {str(last_error)[:160]}") from last_error
         if not info: raise MediaError("Song not found.")
         length = int(info.get("duration") or 0)
         if length and length > settings.max_duration: raise MediaError(f"Tracks longer than {settings.max_duration // 60} minutes are disabled.")
@@ -63,10 +82,7 @@ class MediaResolver:
     async def refresh(self, track: Track) -> Track:
         if track.local_path or not URL_RE.match(track.webpage_url): return track
         if "youtube" not in track.source.lower() and track.stream_url: return track
-        loop = asyncio.get_running_loop()
-        def extract():
-            with yt_dlp.YoutubeDL(self._ydl(track.is_video)) as ydl: return ydl.extract_info(track.webpage_url, download=False)
-        info = await loop.run_in_executor(None, extract)
+        info = await self._extract_info(track.webpage_url, track.is_video)
         track.stream_url = info.get("url") or track.stream_url
         return track
 
@@ -125,9 +141,9 @@ class MediaResolver:
                 "-acodec",
                 "pcm_s16le",
                 "-ac",
-                "2",
+                "1",
                 "-ar",
-                "48000",
+                "32000",
                 str(target),
             ]
             completed = subprocess.run(command, capture_output=True, text=True)
