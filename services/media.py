@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -25,7 +26,7 @@ class MediaResolver:
     def _ydl(stream: bool = True) -> dict:
         return {
             "quiet": True, "no_warnings": True, "noplaylist": True,
-            "format": "best[height<=720]/best" if stream else "bestaudio/best",
+            "format": "best[height<=720]/best" if stream else "bestaudio[ext=m4a]/bestaudio[acodec!=none]/bestaudio/best",
             "socket_timeout": 20, "retries": 2,
             "extract_flat": False, "skip_download": True,
         }
@@ -68,10 +69,44 @@ class MediaResolver:
         track.stream_url = info.get("url") or track.stream_url
         return track
 
+    async def download_for_playback(self, track: Track) -> Track:
+        """Download a temporary local copy for legacy ARMv7 voice engines."""
+        if track.local_path: return track
+        loop = asyncio.get_running_loop()
+        stamp = f"{track.requester_id}_{time.time_ns()}"
+        template = str(self.downloads / f"{stamp}_%(id)s.%(ext)s")
+
+        def download():
+            options = self._ydl(track.is_video)
+            options.update({
+                "skip_download": False,
+                "outtmpl": template,
+                "format": (
+                    "best[height<=480][ext=mp4]/best[height<=480]/best"
+                    if track.is_video else
+                    "bestaudio[ext=m4a]/bestaudio[acodec!=none]/bestaudio/best"
+                ),
+            })
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(track.webpage_url, download=True)
+                requested = info.get("requested_downloads") or []
+                if requested and requested[0].get("filepath"):
+                    return requested[0]["filepath"]
+                return ydl.prepare_filename(info)
+
+        try:
+            path = await loop.run_in_executor(None, download)
+        except Exception as exc:
+            raise MediaError(f"YouTube download failed: {str(exc)[:180]}") from exc
+        if not path or not Path(path).is_file():
+            raise MediaError("The downloaded media file could not be found.")
+        track.local_path = path
+        track.stream_url = None
+        return track
+
     def cleanup(self, track: Track | None) -> None:
         if not track or not track.local_path: return
         try:
             path = Path(track.local_path).resolve()
             if path.is_file() and self.downloads.resolve() in path.parents: path.unlink(missing_ok=True)
         except OSError: pass
-

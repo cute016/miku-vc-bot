@@ -63,6 +63,12 @@ class VoiceController:
                 return None
             try:
                 track = await self.media.refresh(track)
+                if LEGACY_CALLS and (
+                    "youtube" in track.source.lower()
+                    or "youtu" in track.webpage_url.lower()
+                    or "googlevideo.com" in (track.stream_url or "").lower()
+                ):
+                    track = await self.media.download_for_playback(track)
                 stream = self._stream(track, 0, p.speed)
                 await self._play_stream(chat_id, stream, replace=old is not None)
             except Exception as exc:

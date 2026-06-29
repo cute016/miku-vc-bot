@@ -8,10 +8,11 @@ Every generated banner and now-playing card is branded with `@mikuvcrobot`. Tele
 
 - Audio and video VC playback, force play, pause, resume, skip, stop, loop, shuffle, volume, player and queue panels
 - YouTube search/links through `yt-dlp`, direct HTTP(S) streams, and replied Telegram audio/video files
-- Automatic assistant join through PyTgCalls, automatic queue advance, auto-leave, temporary-file cleanup, and fresh YouTube stream URL resolution
+- Automatic assistant join through PyTgCalls, automatic queue advance, auto-leave, temporary-file cleanup, fresh YouTube stream URL resolution, and ARMv7 local-download fallback for signed YouTube media URLs
 - If the assistant is not yet a member, Miku creates a one-use invite and joins it automatically; the bot needs the Telegram admin permission to invite users
 - Per-group admin/auth permissions and English, Tamil, Hindi, and Tanglish preferences
 - Owner panel, editable captions/links/watermark/emoji values, live UI previews, maintenance and logging switches
+- Private assistant session panel for owner and sudo users: generate a new session inside the bot, replace the saved `SESSION_STRING`, and check whether a session is configured
 - Broadcast flags, logs, stats, update, restart, database backup/restore, blacklist, and emoji games
 - Lightweight SQLite WAL storage; no MongoDB server is required on the phone
 
@@ -109,7 +110,7 @@ Always activate `source venv-armv7/bin/activate` before starting the bot on this
 
 Copy `.env.example` to `.env`. Required values are `API_ID`, `API_HASH`, `BOT_TOKEN`, `OWNER_ID`, and `SESSION_STRING`. `SUDO_USERS` accepts comma-separated numeric IDs. Relative SQLite and image paths resolve from the project directory.
 
-The owner can edit visible settings from `/panel`. `/emojis` stores either a normal emoji or a Telegram custom-emoji document ID. Telegram clients only render a custom ID where the message entity/API surface permits it; Miku safely retains the normal emoji labels as fallback.
+The owner and sudo users can edit visible settings from `/panel`. Assistant session actions in that panel open only in private chat because a session string grants full access to the assistant account. `/emojis` stores either a normal emoji or a Telegram custom-emoji document ID. Telegram clients only render a custom ID where the message entity/API surface permits it; Miku safely retains the normal emoji labels as fallback.
 
 ## Commands
 

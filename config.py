@@ -55,3 +55,21 @@ class Settings:
 
 settings = Settings()
 
+
+def update_env_value(key: str, value: str) -> None:
+    """Update one allow-listed secret in .env without invoking a shell."""
+    if key not in {"SESSION_STRING"}:
+        raise ValueError("This environment key cannot be changed here.")
+    env_path = BASE_DIR / ".env"
+    lines = env_path.read_text("utf-8").splitlines() if env_path.exists() else []
+    replacement = f"{key}={value.strip()}"
+    output = []
+    replaced = False
+    for line in lines:
+        if line.startswith(f"{key}="):
+            if not replaced: output.append(replacement); replaced = True
+        else: output.append(line)
+    if not replaced: output.append(replacement)
+    temporary = env_path.with_suffix(".env.tmp")
+    temporary.write_text("\n".join(output) + "\n", encoding="utf-8")
+    temporary.replace(env_path)

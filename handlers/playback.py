@@ -97,8 +97,10 @@ def register(app):
             else:
                 lang=await runtime.db.chat_get(m.chat.id,"language","en")
                 await status.edit_text(f"💗 <b>{tr(lang,'queued')}</b>\n\n🎵 {escape(track.title)}\n⏱ {duration(track.duration)} • Position <b>{pos}</b>")
-        except (MediaError,PlayerError,Exception) as exc:
-            await status.edit_text(f"❌ <b>Miku couldn't play that</b>\n<code>{escape(str(exc)[:300])}</code>\n\nCheck that a group voice chat is active and the assistant is a member.")
+        except Exception as exc:
+            detail=str(exc)
+            if "googlevideo.com" in detail: detail="YouTube media preparation failed. Please try the song again."
+            await status.edit_text(f"❌ <b>Miku couldn't play that</b>\n<code>{escape(detail[:300])}</code>\n\nCheck that a group voice chat is active and the assistant is a member.")
 
     @app.on_message(filters.command(CONTROL_COMMANDS))
     async def controls(_,m):
