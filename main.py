@@ -8,8 +8,14 @@ from logging.handlers import RotatingFileHandler
 
 from pyrogram import Client, idle
 from pyrogram.types import BotCommand
-from pytgcalls import PyTgCalls, filters as call_filters
-from pytgcalls.types import StreamEnded
+from pytgcalls import PyTgCalls
+try:
+    from pytgcalls import filters as call_filters
+    from pytgcalls.types import StreamEnded
+    MODERN_CALLS = True
+except ImportError:
+    from pytgcalls.types.stream import StreamAudioEnded
+    MODERN_CALLS = False
 
 from config import BASE_DIR, settings
 from database import Database
@@ -48,8 +54,8 @@ async def main() -> None:
     runtime.player=VoiceController(calls,queues,media,db)
     register_all(bot)
 
-    @calls.on_update(call_filters.stream_end(StreamEnded.Type.AUDIO))
     async def stream_end(_,update):
+        if not MODERN_CALLS and not isinstance(update, StreamAudioEnded): return
         try:
             track=await runtime.player.play_next(update.chat_id)
             if track:
@@ -59,6 +65,11 @@ async def main() -> None:
                 finally: thumbs.cleanup(card)
         except Exception:
             logging.getLogger(__name__).exception("Failed to advance queue in %s",update.chat_id)
+
+    if MODERN_CALLS:
+        calls.on_update(call_filters.stream_end(StreamEnded.Type.AUDIO))(stream_end)
+    else:
+        calls.on_stream_end()(stream_end)
 
     try:
         await bot.start(); await assistant.start(); await calls.start(); await set_commands(bot)

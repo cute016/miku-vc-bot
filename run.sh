@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 set -u
 cd "$(dirname "$0")"
 mkdir -p downloads thumbnails database
@@ -12,4 +12,3 @@ while true; do
   echo "Miku stopped with code $status; restarting in 5 seconds..."
   sleep 5
 done
-

@@ -23,16 +23,28 @@ Every generated banner and now-playing card is branded with `@mikuvcrobot`. Tele
 
 Never publish `.env`, a session string, or a bot token. A session string grants access to the assistant account.
 
-## Termux installation
+## Termux installation (recommended Debian method)
 
 Use Termux from F-Droid or GitHub; the very old Play Store build is unsupported.
 
+Current NTgCalls releases provide prebuilt Linux ARM64 wheels but pip does not provide an Android/Bionic wheel. Running Miku in Termux's free Debian proot layer lets pip use that wheel and avoids compiling the native WebRTC engine on the phone. Check `uname -m` first; `aarch64` is supported by the published wheel.
+
 ```bash
 pkg update && pkg upgrade -y
-pkg install python python-pillow git ffmpeg nano unzip -y
-unzip miku-vc-bot.zip
+pkg install proot-distro git -y
+proot-distro install debian
+termux-wake-lock
+proot-distro login debian
+```
+
+Inside Debian:
+
+```bash
+apt update && apt upgrade -y
+apt install python3 python3-venv python3-pip git ffmpeg nano tmux -y
+git clone https://github.com/cute016/miku-vc-bot.git
 cd miku-vc-bot
-python -m venv --system-site-packages venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -U pip setuptools wheel
 pip install -r requirements.txt
@@ -50,14 +62,12 @@ Paste the printed value after `SESSION_STRING=` in `.env`, complete the other se
 
 ```bash
 chmod +x run.sh
-termux-wake-lock
 ./run.sh
 ```
 
 For a detachable terminal:
 
 ```bash
-pkg install tmux -y
 tmux new -s miku
 bash run.sh
 ```
@@ -65,6 +75,34 @@ bash run.sh
 Detach with `CTRL+B`, then `D`. Resume with `tmux attach -t miku`.
 
 Android may kill Termux in the background. Disable battery optimization for Termux, allow background activity, keep `termux-wake-lock` active, and leave the phone on a safe charger with adequate ventilation.
+
+### 32-bit ARMv7 installation
+
+Modern NTgCalls no longer publishes ARMv7 wheels, but PyTgCalls 0.9.7 provides a Python 3.11 `manylinux2014_armv7l` wheel. Miku includes a compatibility adapter and a separate requirements file for it. Use Debian 12 Bookworm because it supplies Python 3.11 and glibc:
+
+```bash
+chmod +x setup-termux-armv7.sh
+bash setup-termux-armv7.sh
+proot-distro login miku-debian
+```
+
+Inside Debian:
+
+```bash
+apt update
+apt install python3 python3-venv python3-pip python3-pil python3-aiohttp git ffmpeg nano tmux -y
+git clone https://github.com/cute016/miku-vc-bot.git
+cd miku-vc-bot
+python3 -m venv --system-site-packages venv-armv7
+source venv-armv7/bin/activate
+pip install -U pip setuptools wheel
+pip install -r requirements-armv7.txt
+cp .env.example .env
+nano .env
+bash run.sh
+```
+
+Always activate `source venv-armv7/bin/activate` before starting the bot on this route.
 
 ## Configuration
 

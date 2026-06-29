@@ -4,7 +4,14 @@ import asyncio
 import logging
 from time import monotonic
 
-from pytgcalls.types import MediaStream
+try:
+    from pytgcalls.types import MediaStream
+    LEGACY_CALLS = False
+except ImportError:  # PyTgCalls 0.9.7, used by 32-bit ARMv7 hosts
+    from pytgcalls import StreamType
+    from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
+    from pytgcalls.types.input_stream.quality import HighQualityAudio, HighQualityVideo
+    LEGACY_CALLS = True
 
 from config import settings
 from database import Database
@@ -30,6 +37,18 @@ class VoiceController:
                 return await result if hasattr(result, "__await__") else result
         raise PlayerError(f"Your PyTgCalls build does not provide: {names[0]}")
 
+    async def _play_stream(self, chat_id: int, stream, replace: bool = False):
+        if not LEGACY_CALLS:
+            return await self._invoke(("play",), chat_id, stream)
+        if replace:
+            return await self._invoke(("change_stream",), chat_id, stream)
+        result = self.calls.join_group_call(
+            chat_id,
+            stream,
+            stream_type=StreamType().pulse_stream,
+        )
+        return await result if hasattr(result, "__await__") else result
+
     async def play_next(self, chat_id: int):
         p = self.queues.get(chat_id)
         async with p.lock:
@@ -44,8 +63,8 @@ class VoiceController:
                 return None
             try:
                 track = await self.media.refresh(track)
-                stream = self._stream(track.input, 0, p.speed)
-                await self._invoke(("play", "join_group_call"), chat_id, stream)
+                stream = self._stream(track, 0, p.speed)
+                await self._play_stream(chat_id, stream, replace=old is not None)
             except Exception as exc:
                 log.exception("Could not play in %s", chat_id)
                 p.current = None
@@ -72,7 +91,19 @@ class VoiceController:
         await self._invoke(("change_volume_call", "change_volume"), chat_id, level); self.queues.get(chat_id).volume = level
 
     @staticmethod
-    def _stream(source: str, offset: int = 0, speed: float = 1.0):
+    def _stream(track, offset: int = 0, speed: float = 1.0):
+        source = track.input
+        if LEGACY_CALLS:
+            params = []
+            if offset: params += ["-ss", str(max(0, int(offset)))]
+            if speed != 1.0:
+                params += ["-filter:a", f"atempo={speed}"]
+                if track.is_video: params += ["-filter:v", f"setpts=PTS/{speed}"]
+            extra = " ".join(params)
+            kwargs = {"additional_ffmpeg_parameters": extra} if extra else {}
+            if track.is_video:
+                return AudioVideoPiped(source, HighQualityAudio(), HighQualityVideo(), **kwargs)
+            return AudioPiped(source, HighQualityAudio(), **kwargs)
         if not offset and speed == 1.0: return source
         params = f"---start -ss {max(0, int(offset))}"
         if speed != 1.0:
@@ -82,5 +113,7 @@ class VoiceController:
     async def replay(self, chat_id: int, offset: int = 0):
         p = self.queues.get(chat_id)
         if not p.current: raise PlayerError("Nothing is playing.")
-        await self._invoke(("play", "change_stream"), chat_id, self._stream(p.current.input, offset, p.speed))
+        stream = self._stream(p.current, offset, p.speed)
+        if LEGACY_CALLS: await self._invoke(("change_stream",), chat_id, stream)
+        else: await self._invoke(("play",), chat_id, stream)
         p.started_at = monotonic(); p.offset = offset
