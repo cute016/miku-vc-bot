@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import subprocess
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -100,9 +101,45 @@ class MediaResolver:
             raise MediaError(f"YouTube download failed: {str(exc)[:180]}") from exc
         if not path or not Path(path).is_file():
             raise MediaError("The downloaded media file could not be found.")
+        path = await self._normalize_download(Path(path), track.is_video)
         track.local_path = path
         track.stream_url = None
         return track
+
+    async def _normalize_download(self, source: Path, is_video: bool) -> str:
+        """Transcode legacy-host downloads into broadly compatible local media."""
+        if is_video:
+            return str(source)
+        loop = asyncio.get_running_loop()
+        target = source.with_suffix(".mp3")
+
+        def convert():
+            command = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(source),
+                "-vn",
+                "-ac",
+                "2",
+                "-ar",
+                "48000",
+                "-b:a",
+                "192k",
+                str(target),
+            ]
+            completed = subprocess.run(command, capture_output=True, text=True)
+            if completed.returncode != 0 or not target.is_file():
+                detail = (completed.stderr or completed.stdout or "ffmpeg conversion failed").strip()
+                raise MediaError(f"Audio conversion failed: {detail[:180]}")
+            try:
+                if source.is_file() and source != target:
+                    source.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return str(target)
+
+        return await loop.run_in_executor(None, convert)
 
     def cleanup(self, track: Track | None) -> None:
         if not track or not track.local_path: return
