@@ -29,10 +29,10 @@ Use Termux from F-Droid or GitHub; the very old Play Store build is unsupported.
 
 ```bash
 pkg update && pkg upgrade -y
-pkg install python git ffmpeg nano unzip -y
+pkg install python python-pillow git ffmpeg nano unzip -y
 unzip miku-vc-bot.zip
 cd miku-vc-bot
-python -m venv venv
+python -m venv --system-site-packages venv
 source venv/bin/activate
 pip install -U pip setuptools wheel
 pip install -r requirements.txt

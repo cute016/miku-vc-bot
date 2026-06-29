@@ -9,13 +9,44 @@ from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 
-import psutil
 from pyrogram import filters
 
 from config import BASE_DIR, settings
 from runtime import runtime
 from utils.permissions import require_sudo
 from utils.text import duration
+
+
+def memory_percent() -> float:
+    """Read Linux/Android memory usage without the unsupported psutil package."""
+    try:
+        values = {}
+        with open("/proc/meminfo", encoding="utf-8") as file:
+            for line in file:
+                key, value = line.split(":", 1)
+                values[key] = int(value.strip().split()[0])
+        total = values["MemTotal"]
+        available = values.get("MemAvailable", values.get("MemFree", 0))
+        return round((total - available) * 100 / total, 1)
+    except (OSError, KeyError, ValueError, ZeroDivisionError):
+        return 0.0
+
+
+def cpu_snapshot() -> tuple[int, int]:
+    try:
+        fields = [int(x) for x in Path("/proc/stat").read_text(encoding="utf-8").splitlines()[0].split()[1:]]
+        idle = fields[3] + (fields[4] if len(fields) > 4 else 0)
+        return sum(fields), idle
+    except (OSError, ValueError, IndexError):
+        return 0, 0
+
+
+async def cpu_percent() -> float:
+    total1, idle1 = cpu_snapshot()
+    await asyncio.sleep(0.15)
+    total2, idle2 = cpu_snapshot()
+    delta = total2 - total1
+    return round((1 - (idle2 - idle1) / delta) * 100, 1) if delta > 0 else 0.0
 
 
 def register(app):
@@ -30,7 +61,8 @@ def register(app):
         users,chats=await asyncio.gather(runtime.db.count("users"),runtime.db.count("chats")); daily,total=await runtime.db.song_stats()
         disk=shutil.disk_usage(BASE_DIR); downloads=sum(p.stat().st_size for p in (BASE_DIR/"downloads").glob("**/*") if p.is_file())
         up=int((datetime.now(timezone.utc)-runtime.started_at).total_seconds())
-        await m.reply_text(f"📊 <b>ᴍɪᴋᴜ sᴛᴀᴛs</b>\n\n👤 Users: <b>{users}</b>\n💬 Chats: <b>{chats}</b>\n🎙 Active streams: <b>{runtime.queues.active_count()}</b>\n🎵 Songs today / total: <b>{daily} / {total}</b>\n⏱ Uptime: <b>{duration(up)}</b>\n🧠 RAM: <b>{psutil.virtual_memory().percent}%</b>\n⚙️ CPU: <b>{psutil.cpu_percent()}%</b>\n💾 Storage: <b>{disk.used/disk.total*100:.1f}%</b>\n📥 Downloads: <b>{downloads/1048576:.1f} MB</b>")
+        cpu=await cpu_percent(); ram=memory_percent()
+        await m.reply_text(f"📊 <b>ᴍɪᴋᴜ sᴛᴀᴛs</b>\n\n👤 Users: <b>{users}</b>\n💬 Chats: <b>{chats}</b>\n🎙 Active streams: <b>{runtime.queues.active_count()}</b>\n🎵 Songs today / total: <b>{daily} / {total}</b>\n⏱ Uptime: <b>{duration(up)}</b>\n🧠 RAM: <b>{ram}%</b>\n⚙️ CPU: <b>{cpu}%</b>\n💾 Storage: <b>{disk.used/disk.total*100:.1f}%</b>\n📥 Downloads: <b>{downloads/1048576:.1f} MB</b>")
 
     @app.on_message(filters.command("logs"))
     async def logs(_,m):
@@ -103,4 +135,3 @@ def register(app):
     async def restart(_,m):
         if not await require_sudo(m): return
         await m.reply_text("🔄 Restarting Miku..."); await runtime.db.close(); await runtime.assistant.stop(); await runtime.bot.stop(); os.execv(sys.executable,[sys.executable,*sys.argv])
-
