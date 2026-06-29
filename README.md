@@ -123,6 +123,17 @@ pip install --no-cache-dir py-tgcalls==0.9.7
 bash run.sh
 ```
 
+If you see `Audio conversion failed: ffmpeg: error while loading shared libraries: libx264... cannot enable executable stack`, Debian's `ffmpeg` build is the problem, not the bot code. Miku's launcher now auto-wraps Termux host `ffmpeg` and `ffprobe` when they exist, while still using Debian `node` for PyTgCalls. Make sure Termux itself has them installed outside Debian:
+
+```bash
+exit
+pkg install -y ffmpeg
+proot-distro login miku-debian
+cd ~/miku-vc-bot
+source venv-armv7/bin/activate
+bash run.sh
+```
+
 ## Configuration
 
 Copy `.env.example` to `.env`. Required values are `API_ID`, `API_HASH`, `BOT_TOKEN`, `OWNER_ID`, and `SESSION_STRING`. `SUDO_USERS` accepts comma-separated numeric IDs. Relative SQLite and image paths resolve from the project directory.
